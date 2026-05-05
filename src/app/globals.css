@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  color-scheme: light;
+  overflow-x: clip;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Хэрэв чиний input-үүд хэт наалдаад байвал энд жаахан загвар нэмж болно */
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100;
+  overflow-x: clip;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

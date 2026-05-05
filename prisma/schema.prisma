@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RESIDENT
+  SOH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum RequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  email         String    @unique
+  password      String
+  name          String?
+  role          Role      @default(RESIDENT)
+  unitNumber    String?
+  phoneNumber   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  payments      Payment[]       @relation("ResidentPayments")
+  requests      Request[]       @relation("ResidentRequests")
+}
+
+model Payment {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  residentId  String        @db.ObjectId
+  resident    User          @relation("ResidentPayments", fields: [residentId], references: [id])
+  amount      Float
+  month       String        // "2026-04"
+  description String?
+  status      PaymentStatus @default(PENDING)
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+model Request {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  residentId  String        @db.ObjectId
+  resident    User          @relation("ResidentRequests", fields: [residentId], references: [id])
+  title       String
+  description String
+  status      RequestStatus @default(OPEN)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Announcement {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  content   String
+  type      String   @default("INFO")
+  createdAt DateTime @default(now())
+}
+model PasswordResetToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  token     String   @unique
+  code      String
+  expires   DateTime
+  createdAt DateTime @default(now())
+}
+
+model Poll {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  question  String
+  options   PollOption[]
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model PollOption {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  pollId  String   @db.ObjectId
+  poll    Poll     @relation(fields: [pollId], references: [id])
+  text    String
+  votes   Int      @default(0)
+}
+
+model GroupChatMessage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String?  @db.ObjectId
+  userName  String
+  userRole  String
+  content   String
+  createdAt DateTime @default(now())
+}
