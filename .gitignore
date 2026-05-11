@@ -10,3 +10,5 @@ dev-server*.log
 .env
 
 /src/generated/prisma
+
+.vercel
