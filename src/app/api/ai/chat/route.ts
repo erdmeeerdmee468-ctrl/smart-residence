@@ -145,6 +145,12 @@ type RawRequestWithResident = {
   createdAt?: Date | string;
   resident?: RawResidentRef | null;
 };
+type RawAnnouncementRecord = {
+  title?: string;
+  content?: string;
+  type?: string;
+  createdAt?: unknown;
+};
 
 function sanitizeHistory(value: unknown): ChatHistoryItem[] {
   if (!Array.isArray(value)) return [];
@@ -182,7 +188,7 @@ async function renderGroupChatContext() {
 
 function fmtAnyDate(value: unknown) {
   if (value instanceof Date) return fmtDate(value);
-  if (typeof value === "string") return fmtDate(new Date(value));
+  if (typeof value === "string") return fmtDate(new Date(value.replace(/^"+|"+$/g, "")));
   if (value && typeof value === "object" && "$date" in value) {
     const raw = (value as { $date?: string | number }).$date;
     return raw ? fmtDate(new Date(raw)) : "—";
@@ -220,6 +226,19 @@ async function listRequestsWithResident(limit: number): Promise<RawRequestWithRe
   return (result as { cursor?: { firstBatch?: RawRequestWithResident[] } }).cursor?.firstBatch ?? [];
 }
 
+async function listRecentAnnouncements(limit: number): Promise<RawAnnouncementRecord[]> {
+  const result = await prisma.$runCommandRaw({
+    aggregate: "Announcement",
+    pipeline: [
+      { $sort: { createdAt: -1 } },
+      { $limit: limit },
+      { $project: { _id: 0, title: 1, content: 1, type: 1, createdAt: 1 } },
+    ],
+    cursor: {},
+  });
+  return (result as { cursor?: { firstBatch?: RawAnnouncementRecord[] } }).cursor?.firstBatch ?? [];
+}
+
 async function countRegistrationRequestsByStatus(status: string) {
   const result = await prisma.$runCommandRaw({
     count: "RegistrationRequest",
@@ -246,11 +265,7 @@ async function buildResidentContext(userId: string): Promise<ResidentContextPayl
       take: 20,
       select: { title: true, description: true, status: true, createdAt: true, updatedAt: true },
     }),
-    prisma.announcement.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { title: true, content: true, type: true, createdAt: true },
-    }),
+    listRecentAnnouncements(8),
     prisma.poll.findMany({
       orderBy: { createdAt: "desc" },
       take: 6,
@@ -302,10 +317,10 @@ async function buildResidentContext(userId: string): Promise<ResidentContextPayl
       updatedAt: fmtDate(request.updatedAt),
     })),
     announcements: announcements.map((announcement) => ({
-      title: announcement.title,
-      type: announcement.type,
-      createdAt: fmtDate(announcement.createdAt),
-      content: announcement.content,
+      title: announcement.title ?? "",
+      type: announcement.type ?? "INFO",
+      createdAt: fmtAnyDate(announcement.createdAt),
+      content: announcement.content ?? "",
     })),
     polls: polls.map((poll) => ({
       question: poll.question,
@@ -332,11 +347,7 @@ async function buildSohContext(userName: string, userEmail: string): Promise<Soh
       take: 8,
       select: { question: true, expiresAt: true, options: { select: { text: true, votes: true } } },
     }),
-    prisma.announcement.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { title: true, content: true, type: true, createdAt: true },
-    }),
+    listRecentAnnouncements(8),
   ]);
 
   const totals = allPayments.reduce(
@@ -405,10 +416,10 @@ async function buildSohContext(userName: string, userEmail: string): Promise<Soh
       options: poll.options.map((option) => ({ text: option.text, votes: option.votes })),
     })),
     announcements: announcements.map((announcement) => ({
-      title: announcement.title,
-      type: announcement.type,
-      createdAt: fmtDate(announcement.createdAt),
-      content: announcement.content,
+      title: announcement.title ?? "",
+      type: announcement.type ?? "INFO",
+      createdAt: fmtAnyDate(announcement.createdAt),
+      content: announcement.content ?? "",
     })),
   };
 }
