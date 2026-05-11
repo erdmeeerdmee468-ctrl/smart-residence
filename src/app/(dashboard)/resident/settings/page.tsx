@@ -1,18 +1,8 @@
 "use client";
 
-import { ResidentGuard } from "@/components/auth-guard";
 import { useEffect, useState } from "react";
 
-// Settings page wrapper with auth guard
-export default function ResidentSettingsPage() {
-  return (
-    <ResidentGuard>
-      <ResidentSettings />
-    </ResidentGuard>
-  );
-}
-
-function ResidentSettings() {
+export default function ResidentSettings() {
   const [user, setUser] = useState({ name: "", email: "", phoneNumber: "", unitNumber: "" });
   const [passwords, setPasswords] = useState({ current: "", newPass: "", confirm: "" });
   const [loading, setLoading] = useState(true);

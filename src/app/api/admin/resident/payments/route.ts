@@ -77,3 +77,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Серверийн алдаа" }, { status: 500 });
   }
 }
+
+/** Оршин суугч зөвхөн өөрийнхөө `PAID` төлбөрийг устгана. */
+export async function DELETE(req: Request) {
+  try {
+    const session = await getSessionUser();
+    const gate = requireRoles(session, ["RESIDENT"]);
+    if (gate instanceof NextResponse) return gate;
+
+    const body = (await req.json()) as { paymentId?: string };
+    const paymentId = typeof body.paymentId === "string" ? body.paymentId.trim() : "";
+    if (!paymentId) {
+      return NextResponse.json({ message: "Төлбөрийн ID дамжуулна уу" }, { status: 400 });
+    }
+
+    const existing = await prisma.payment.findFirst({
+      where: { id: paymentId, residentId: gate.id },
+      select: { id: true, status: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ message: "Төлбөр олдсонгүй" }, { status: 404 });
+    }
+
+    if (existing.status !== "PAID") {
+      return NextResponse.json({ message: "Зөвхөн PAID төлбөрийг устгах боломжтой" }, { status: 400 });
+    }
+
+    await prisma.payment.delete({ where: { id: paymentId } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Payments DELETE error:", error);
+    return NextResponse.json({ message: "Серверийн алдаа" }, { status: 500 });
+  }
+}

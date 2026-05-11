@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/erdem/OneDrive/Desktop/project/smart-residence/src/app/%28auth%29/layout.tsx"],"sourcesContent":["export default function AuthLayout({ children }: { children: React.ReactNode }) {\r\n  return (\r\n    <main className=\"min-h-screen bg-[#04060b] text-white\">\r\n      {children}\r\n    </main>\r\n  );\r\n}\r\n"],"names":["AuthLayout","children","className"],"mappings":";;;;;;AAAe,SAASA,WAAW,EAAEC,QAAQ,EAAiC;IAC5E,qBACE,qaAAC;QAAKC,WAAU;kBACbD;;;;;;AAGP"}}]
-}

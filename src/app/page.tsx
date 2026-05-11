@@ -1,23 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ResidenceLogo } from "@/components/brand/ResidenceLogo";
 
 const contacts = [
   {
-    icon: "📞",
     label: "Утас",
     value: "+976 95082227",
     href: "tel:+97695082227",
   },
   {
-    icon: "✉️",
     label: "Gmail",
     value: "info@smartresidence.mn",
     href: "mailto:info@smartresidence.mn",
   },
   {
-    icon: "📘",
     label: "Facebook",
     value: "Smart Residence",
     href: "https://facebook.com/smartresidence",
@@ -27,14 +25,17 @@ const contacts = [
 
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setMounted(true);
+    videoRef.current?.play().catch(() => {});
   }, []);
 
   return (
     <main className="relative min-h-[100dvh] min-h-screen w-full overflow-hidden bg-black">
       <video
+        ref={videoRef}
         autoPlay
         loop
         muted
@@ -47,7 +48,7 @@ export default function HomePage() {
       <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/45 to-black/80" />
 
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.05]"
+        className="pointer-events-none absolute inset-0 opacity-[0.05]"
         style={{
           backgroundImage:
             "linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px)",
@@ -58,31 +59,23 @@ export default function HomePage() {
       <div className="relative z-10 flex min-h-[100dvh] min-h-screen flex-col">
         <header className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-xl backdrop-blur-md">
-              🏢
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md">
+              <ResidenceLogo className="h-full w-full" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-white/50">
-                Smart Residence
-              </p>
-              <h1 className="text-lg font-bold text-white">
-                Орон сууцны ухаалаг систем
-              </h1>
+              <p className="text-xs uppercase tracking-[0.35em] text-white/50">Smart Residence</p>
+              <h1 className="text-lg font-bold text-white">Орон сууцны ухаалаг систем</h1>
             </div>
           </div>
 
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
-            <p className="text-sm font-semibold text-white/90 sm:text-base">
-              Та манай оршин суугч уу?
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 active:scale-95"
-              >
-                Нэвтрэх
-              </Link>
-            </div>
+            <p className="text-sm font-semibold text-white/90 sm:text-base">Та манай оршин суугч уу?</p>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 active:scale-95"
+            >
+              Нэвтрэх
+            </Link>
           </div>
         </header>
 
@@ -94,26 +87,18 @@ export default function HomePage() {
           <div className="mx-auto max-w-4xl text-center">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-md">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              <span className="text-xs font-medium text-white/80">
-                Smart Residence · Гэрийн ухаалаг шийдэл
-              </span>
+              <span className="text-xs font-medium text-white/80">Smart Residence · Хотхоны ухаалаг шийдэл</span>
             </div>
 
             <h2 className="text-[clamp(1.65rem,8vw,4.5rem)] font-black leading-[1.1] text-white drop-shadow-2xl sm:text-5xl lg:text-7xl">
               SMART
-              <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                {" "}
-                RESIDENCE
-              </span>
-              <br />
-              
+              <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent"> RESIDENCE</span>
             </h2>
 
             <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-white/75 sm:text-lg">
-              Орон сууцны зар мэдээлэл, үйлчилгээ, төлбөр тооцоо болон хүсэлтийг
-              оршин суугч бүрд ойлгомжтой, хурдан, найдвартай байдлаар хүргэнэ.
+              Орон сууцны зар мэдээлэл, үйлчилгээ, төлбөр тооцоо болон хүсэлтийг оршин суугч бүрд ойлгомжтой, хурдан,
+              найдвартай байдлаар хүргэнэ.
             </p>
-
           </div>
         </section>
 
@@ -123,32 +108,20 @@ export default function HomePage() {
               {contacts.map((item, index) => (
                 <div key={item.label} className="flex items-center gap-3">
                   {item.external ? (
-                    <a
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="transition hover:text-white/90"
-                    >
+                    <a href={item.href} target="_blank" rel="noreferrer" className="transition hover:text-white/90">
                       {item.value}
                     </a>
                   ) : (
-                    <a
-                      href={item.href}
-                      className="transition hover:text-white/90"
-                    >
+                    <a href={item.href} className="transition hover:text-white/90">
                       {item.value}
                     </a>
                   )}
-                  {index < contacts.length - 1 ? (
-                    <span className="text-white/20">•</span>
-                  ) : null}
+                  {index < contacts.length - 1 ? <span className="text-white/20">•</span> : null}
                 </div>
               ))}
             </div>
 
-            <p className="text-[11px] text-white/25">
-              © 2026 Smart Residence. Бүх эрх хуулиар хамгаалагдсан.
-            </p>
+            <p className="text-[11px] text-white/25">© 2026 Smart Residence. Бүх эрх хуулиар хамгаалагдсан.</p>
           </div>
         </footer>
       </div>

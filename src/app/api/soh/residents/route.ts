@@ -15,6 +15,8 @@ export async function GET() {
       name: true,
       email: true,
       unitNumber: true,
+      phoneNumber: true,
+      avatarUrl: true,
     },
   });
   return NextResponse.json(residents);

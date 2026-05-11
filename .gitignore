@@ -1,4 +1,10 @@
 node_modules
+.next
+out
+dist
+debug.log
+dev-server*.log
+
 # Keep environment variables out of version control
 .env
 

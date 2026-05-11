@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 
-export default async function SohLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  if (user.role !== "SOH" && user.role !== "ADMIN") {
+  if (user.role !== "ADMIN") {
     redirect("/unauthorized");
   }
 

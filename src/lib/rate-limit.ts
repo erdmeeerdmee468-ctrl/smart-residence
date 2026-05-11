@@ -14,6 +14,10 @@ const RATE_LIMIT_CONFIG = {
     maxRequests: 5, // 5 attempts
     windowMs: 15 * 60 * 1000, // 15 minutes
   },
+  REGISTER_REQUEST: {
+    maxRequests: 3,
+    windowMs: 60 * 60 * 1000, // 1 hour
+  },
   API: {
     maxRequests: 100,
     windowMs: 60 * 1000, // 1 minute
@@ -30,7 +34,7 @@ function getClientIdentifier(request: Request): string {
 
 export function checkRateLimit(
   request: Request,
-  type: "LOGIN" | "API" = "API"
+  type: "LOGIN" | "REGISTER_REQUEST" | "API" = "API"
 ): { success: boolean; limit: number; remaining: number; resetTime: number } {
   const clientId = getClientIdentifier(request);
   const key = `${clientId}:${type}`;
@@ -79,7 +83,7 @@ export function checkRateLimit(
 // Rate limit middleware helper
 export function rateLimitMiddleware(
   request: Request,
-  type: "LOGIN" | "API" = "API"
+  type: "LOGIN" | "REGISTER_REQUEST" | "API" = "API"
 ): Response | null {
   const result = checkRateLimit(request, type);
 

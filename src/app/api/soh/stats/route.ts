@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, requireRoles } from "@/lib/session";
 
+type RequestRow = {
+  id: string;
+  residentId: string;
+  title: string;
+  description: string;
+  status: string;
+  createdAt: Date;
+};
+
 export async function GET() {
   const session = await getSessionUser();
   const gate = requireRoles(session, ["SOH", "ADMIN"]);
@@ -31,7 +40,14 @@ export async function GET() {
       }),
       prisma.request.findMany({
         where: { status: "OPEN" },
-        include: { resident: { select: { name: true, unitNumber: true } } },
+        select: {
+          id: true,
+          residentId: true,
+          title: true,
+          description: true,
+          status: true,
+          createdAt: true,
+        },
         orderBy: { createdAt: "desc" },
         take: 3,
       }),
@@ -42,6 +58,13 @@ export async function GET() {
       }),
     ]);
 
+    const residentIds = Array.from(new Set((requests as RequestRow[]).map((request) => request.residentId)));
+    const residents = await prisma.user.findMany({
+      where: { id: { in: residentIds } },
+      select: { id: true, name: true, unitNumber: true },
+    });
+    const residentMap = new Map(residents.map((resident) => [resident.id, resident]));
+
     return NextResponse.json({
       stats: {
         newRequests,
@@ -49,7 +72,10 @@ export async function GET() {
         monthIncome: monthPayments._sum.amount ?? 0,
         activePolls: polls.length,
       },
-      requests,
+      requests: (requests as RequestRow[]).map((request) => ({
+        ...request,
+        resident: residentMap.get(request.residentId) ?? { name: null, unitNumber: null },
+      })),
       announcements,
       polls,
     });

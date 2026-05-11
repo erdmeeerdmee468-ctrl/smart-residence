@@ -20,9 +20,15 @@ type AiBubble = {
   text: string;
 };
 
+const CHAT_POSITION_KEY = "smart-residence-chat-position";
+const CHAT_BUTTON_SIZE = 56;
+const CHAT_EDGE_GAP = 12;
+
 export function GlobalChatWidget() {
   const pathname = usePathname();
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const positionRef = useRef<{ x: number; y: number } | null>(null);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<PanelTab>("group");
   const [input, setInput] = useState("");
@@ -32,6 +38,7 @@ export function GlobalChatWidget() {
     { role: "assistant", text: "Сайн байна уу? Төлбөр, хүсэлт, статистикийн талаар асуултаа бичнэ үү." },
   ]);
   const [meId, setMeId] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
 
   const roleTone = useMemo(
     () => ({
@@ -56,7 +63,7 @@ export function GlobalChatWidget() {
 
   useEffect(() => {
     // ✅ Нуугдах үед init хийхгүй
-    if (pathname?.startsWith("/login") || pathname?.startsWith("/api")) return;
+    if (pathname === "/" || pathname?.startsWith("/login") || pathname?.startsWith("/api")) return;
 
     const init = async () => {
       try {
@@ -83,8 +90,52 @@ export function GlobalChatWidget() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, aiMessages, open, tab]);
 
+  useEffect(() => {
+    const clampPosition = (next: { x: number; y: number }) => ({
+      x: Math.min(Math.max(CHAT_EDGE_GAP, next.x), window.innerWidth - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP),
+      y: Math.min(Math.max(CHAT_EDGE_GAP, next.y), window.innerHeight - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP),
+    });
+
+    const stored = window.localStorage.getItem(CHAT_POSITION_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { x?: number; y?: number };
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          const next = clampPosition({ x: parsed.x, y: parsed.y });
+          positionRef.current = next;
+          setPosition(next);
+          return;
+        }
+      } catch {
+        // ignore malformed saved position
+      }
+    }
+
+    const next = clampPosition({ x: window.innerWidth - CHAT_BUTTON_SIZE - 20, y: window.innerHeight - CHAT_BUTTON_SIZE - 20 });
+    positionRef.current = next;
+    setPosition(next);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((current) => {
+        if (!current) return current;
+        const next = {
+          x: Math.min(Math.max(CHAT_EDGE_GAP, current.x), window.innerWidth - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP),
+          y: Math.min(Math.max(CHAT_EDGE_GAP, current.y), window.innerHeight - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP),
+        };
+        positionRef.current = next;
+        window.localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next));
+        return next;
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // ✅ Бүх hook-уудын ДАРАА нөхцөлт return
-  if (pathname?.startsWith("/login") || pathname?.startsWith("/api")) {
+  if (pathname === "/" || pathname?.startsWith("/login") || pathname?.startsWith("/api")) {
     return null;
   }
 
@@ -134,7 +185,13 @@ export function GlobalChatWidget() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({
+          question,
+          history: aiMessages.slice(-12).map((message) => ({
+            role: message.role,
+            content: message.text,
+          })),
+        }),
       });
       const data = await res.json();
 
@@ -156,10 +213,37 @@ export function GlobalChatWidget() {
     else sendAiQuestion();
   };
 
+  const moveChat = (clientX: number, clientY: number) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    const dx = clientX - drag.startX;
+    const dy = clientY - drag.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+
+    const next = {
+      x: Math.min(Math.max(CHAT_EDGE_GAP, drag.originX + dx), window.innerWidth - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP),
+      y: Math.min(Math.max(CHAT_EDGE_GAP, drag.originY + dy), window.innerHeight - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP),
+    };
+    positionRef.current = next;
+    setPosition(next);
+  };
+
+  const finishDrag = () => {
+    const drag = dragRef.current;
+    if (!drag) return false;
+    dragRef.current = null;
+    if (positionRef.current) window.localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(positionRef.current));
+    return drag.moved;
+  };
+
   return (
-    <div className="fixed z-[70] max-sm:left-3 max-sm:right-3 right-[max(1.25rem,env(safe-area-inset-right))] bottom-[max(1.25rem,env(safe-area-inset-bottom))] sm:right-5 sm:bottom-5">
+    <div
+      className="fixed z-[70] w-max touch-none"
+      style={position ? { left: position.x, top: position.y } : { right: "1.25rem", bottom: "1.25rem" }}
+    >
       {open ? (
-        <div className="mb-3 flex h-[min(440px,calc(100dvh-7.5rem))] w-full max-w-[350px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.2)] dark:border-slate-600 dark:bg-slate-900 dark:shadow-[0_20px_60px_rgba(0,0,0,0.45)] max-sm:max-w-none sm:ml-auto">
+        <div className="absolute bottom-[calc(100%+0.75rem)] right-0 flex h-[min(440px,calc(100dvh-7.5rem))] w-[min(350px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.2)] dark:border-slate-600 dark:bg-slate-900 dark:shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
             <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
               <button
@@ -260,8 +344,24 @@ export function GlobalChatWidget() {
       ) : null}
 
       <button
-        onClick={() => setOpen((prev) => !prev)}
-        className="ml-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_14px_35px_rgba(37,99,235,0.4)] transition hover:scale-[1.02] hover:bg-blue-500 max-sm:h-12 max-sm:w-12"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const current = position ?? { x: window.innerWidth - CHAT_BUTTON_SIZE - 20, y: window.innerHeight - CHAT_BUTTON_SIZE - 20 };
+          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: current.x, originY: current.y, moved: false };
+        }}
+        onPointerMove={(event) => {
+          if (dragRef.current?.pointerId === event.pointerId) moveChat(event.clientX, event.clientY);
+        }}
+        onPointerUp={(event) => {
+          if (dragRef.current?.pointerId !== event.pointerId) return;
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          const moved = finishDrag();
+          if (!moved) setOpen((prev) => !prev);
+        }}
+        onPointerCancel={() => {
+          finishDrag();
+        }}
+        className="flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_14px_35px_rgba(37,99,235,0.4)] transition hover:scale-[1.02] hover:bg-blue-500 active:cursor-grabbing"
         title="Чат ба AI туслах"
       >
         <MessageCircle size={24} strokeWidth={2} />

@@ -25,6 +25,12 @@ enum RequestStatus {
   RESOLVED
 }
 
+enum RegistrationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   email         String    @unique
@@ -33,6 +39,7 @@ model User {
   role          Role      @default(RESIDENT)
   unitNumber    String?
   phoneNumber   String?
+  avatarUrl     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -68,17 +75,9 @@ model Announcement {
   title     String
   content   String
   type      String   @default("INFO")
+  imageUrl  String?
   createdAt DateTime @default(now())
 }
-model PasswordResetToken {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String
-  token     String   @unique
-  code      String
-  expires   DateTime
-  createdAt DateTime @default(now())
-}
-
 model Poll {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   question  String
@@ -102,4 +101,17 @@ model GroupChatMessage {
   userRole  String
   content   String
   createdAt DateTime @default(now())
+}
+
+model RegistrationRequest {
+  id          String                    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String
+  password    String
+  phoneNumber String?
+  unitNumber  String?
+  note        String?
+  status      RegistrationRequestStatus @default(PENDING)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
 }

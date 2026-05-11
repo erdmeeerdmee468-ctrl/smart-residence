@@ -1,8 +1,7 @@
-import "./globals.css"; // Энийг заавал нэмнэ
+import "./globals.css";
 import type { Viewport } from "next";
-import { Inter } from "next/font/google";
-
-const inter = Inter({ subsets: ["latin"] });
+import { GlobalChatMount } from "@/components/ai/GlobalChatMount";
+import { ThemeScript } from "@/components/theme/ThemeScript";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -16,9 +15,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="mn">
-      <body className={inter.className}>
+    <html lang="mn" suppressHydrationWarning>
+      <body>
+        <ThemeScript />
         {children}
+        <GlobalChatMount />
       </body>
     </html>
   );

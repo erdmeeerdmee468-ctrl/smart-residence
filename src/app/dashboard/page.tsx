@@ -1,21 +1,20 @@
-import { cookies } from "next/headers";
-import { redirect } from 'next/navigation';
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/session";
 
 export default async function DashboardPage() {
-  // Cookie-с хэрэглэгчийн role-г авч тохирох хуудас руу шилжүүлнэ
-  const jar = await cookies();
-  const userRole = jar.get("userRole")?.value;
+  const user = await getSessionUser();
 
-  if (!userRole) {
-    redirect('/login');
+  if (!user) {
+    redirect("/login");
   }
 
-  // Role-оос хамаарч тохирох хуудас руу шилжүүлнэ
-  if (userRole === "ADMIN") {
-    redirect('/admin');
-  } else if (userRole === "SOH") {
-    redirect('/soh');
-  } else {
-    redirect('/resident');
+  if (user.role === "ADMIN") {
+    redirect("/admin");
   }
+
+  if (user.role === "SOH") {
+    redirect("/soh");
+  }
+
+  redirect("/resident");
 }

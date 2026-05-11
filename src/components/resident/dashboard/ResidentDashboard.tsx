@@ -16,6 +16,7 @@ import {
   FileText,
   Home,
   Loader2,
+  LogOut,
   Mail,
   MessageSquare,
   Phone,
@@ -25,9 +26,13 @@ import {
   User,
   Wallet,
   Wrench,
+  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react";
+import { ResidenceLogo } from "@/components/brand/ResidenceLogo";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { NotificationsModal } from "@/components/notifications/NotificationsModal";
 
 type Payment = {
   id: string;
@@ -53,6 +58,7 @@ type Announcement = {
   title: string;
   content: string;
   type: string;
+  imageUrl?: string | null;
   createdAt: string;
 };
 
@@ -69,6 +75,7 @@ type UserType = {
   email: string;
   unitNumber?: string | null;
   phoneNumber?: string | null;
+  avatarUrl?: string | null;
   createdAt?: string;
 };
 
@@ -141,6 +148,8 @@ const navItems: {
   { href: "/resident/contact", label: "Холбоо барих", Icon: Phone },
 ];
 
+const RESIDENT_NOTIFICATION_READ_KEY = "smart-residence-resident-read-announcements";
+
 function Card({
   children,
   className = "",
@@ -207,12 +216,16 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
   const [mounted, setMounted] = useState(false);
   const [selectedPollOption, setSelectedPollOption] = useState<Record<string, string>>({});
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
-  const [reqForm, setReqForm] = useState({ title: "", description: "" });
+  const [reqForm, setReqForm] = useState({ title: "", description: "", notes: "" });
   const [showReqForm, setShowReqForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<{ payment: Payment; receiptNo: string } | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payMessage, setPayMessage] = useState("");
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([]);
+  const [selectedAnnouncementImage, setSelectedAnnouncementImage] = useState<{ src: string; title: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -252,6 +265,23 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(RESIDENT_NOTIFICATION_READ_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(parsed)) {
+        setReadAnnouncementIds(parsed.filter((id): id is string => typeof id === "string"));
+      }
+    } catch {
+      setReadAnnouncementIds([]);
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  };
+
   const submitRequest = async () => {
     if (!reqForm.title.trim() || !reqForm.description.trim()) return;
 
@@ -263,7 +293,7 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
     });
 
     if (res.ok) {
-      setReqForm({ title: "", description: "" });
+      setReqForm({ title: "", description: "", notes: "" });
       setShowReqForm(false);
       fetchData();
     }
@@ -318,6 +348,51 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
     }
   };
 
+  const deletePayment = async (paymentId: string) => {
+    setDeletingPaymentId(paymentId);
+    setPayMessage("");
+
+    try {
+      const res = await fetch("/api/resident/payments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { message?: string };
+      if (!res.ok) {
+        setPayMessage(data.message ?? "Төлбөр устгахад алдаа гарлаа");
+        return;
+      }
+
+      if (receipt?.payment.id === paymentId) {
+        setReceipt(null);
+      }
+      void fetchData();
+    } catch {
+      setPayMessage("Сүлжээний алдаа");
+    } finally {
+      setDeletingPaymentId(null);
+    }
+  };
+
+  const markAnnouncementsRead = useCallback(() => {
+    const ids = announcements.map((announcement) => announcement.id);
+    if (ids.length === 0) return;
+
+    setReadAnnouncementIds((current) => {
+      const next = Array.from(new Set([...current, ...ids]));
+      window.localStorage.setItem(RESIDENT_NOTIFICATION_READ_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [announcements]);
+
+  useEffect(() => {
+    if (view === "announcements") {
+      markAnnouncementsRead();
+    }
+  }, [markAnnouncementsRead, view]);
+
   const fmtDate = (date?: string | null) => (mounted && date ? new Date(date).toLocaleDateString("mn-MN") : "—");
   const latestPayment = payments[0];
   const openRequests = requests.filter((request) => request.status !== "RESOLVED").length;
@@ -325,6 +400,7 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
     .filter((payment) => payment.status !== "PAID")
     .reduce((sum, payment) => sum + payment.amount, 0);
   const activePoll = polls[0];
+  const unreadAnnouncementCount = announcements.filter((announcement) => !readAnnouncementIds.includes(announcement.id)).length;
   const currentTitle =
     view === "payments"
       ? "Төлбөрийн мэдээлэл"
@@ -347,12 +423,12 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
 
   return (
     <div className="min-h-screen bg-[#f3f5f7] p-3 text-gray-900 dark:bg-slate-950 dark:text-slate-100 sm:p-4">
-      <div className="mx-auto flex min-h-[calc(100vh-24px)] max-w-[1520px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
+      <div className="mx-auto flex h-[calc(100vh-24px)] max-w-[1520px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_20px_70px_rgba(0,0,0,0.35)] sm:h-[calc(100vh-32px)]">
         <aside className="hidden w-[190px] shrink-0 flex-col bg-[#075c46] md:flex">
           <div className="px-4 pb-5 pt-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/10">
-                <Building2 size={22} className="text-white" strokeWidth={1.8} />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white p-1.5 shadow-lg shadow-black/20">
+                <ResidenceLogo className="h-full w-full" />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-[12px] font-black uppercase text-white">Өндөр хотхон</p>
@@ -361,14 +437,14 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
             </div>
           </div>
 
-          <nav className="flex-1 space-y-1 px-3">
+          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {navItems.map(({ href, label, Icon }) => {
               const active = pathname === href || (href !== "/resident" && pathname?.startsWith(href));
               const badge =
                 href === "/resident/requests"
                   ? openRequests
                   : href === "/resident/news"
-                    ? announcements.length
+                    ? unreadAnnouncementCount
                     : 0;
 
               return (
@@ -393,25 +469,41 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
             })}
           </nav>
 
-          <div className="border-t border-white/10 p-3">
-            <div className="flex items-center gap-2 rounded-md px-2 py-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-black text-emerald-700">
-                {user?.name?.[0]?.toUpperCase() ?? "?"}
-              </div>
+          <div className="mt-auto shrink-0 border-t border-white/10 p-3">
+            <div className="flex items-center gap-2">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/30 object-cover" />
+              ) : (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-black text-emerald-700">
+                  {user?.name?.[0]?.toUpperCase() ?? "?"}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-bold text-white">{user?.name ?? "Оршин суугч"}</p>
-                <p className="truncate text-[10px] text-emerald-100/70">{user?.unitNumber ? `${user.unitNumber}-р байр` : user?.email ?? ""}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-xs font-bold text-white">{user?.name ?? "Оршин суугч"}</p>
+                  <button
+                    onClick={handleLogout}
+                    title="Гарах"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/30 bg-red-500/90 text-white shadow-sm transition hover:bg-red-600"
+                  >
+                    <LogOut size={13} />
+                  </button>
+                </div>
+                {user?.unitNumber ? (
+                  <p className="truncate text-[10px] text-emerald-100/70">{user.unitNumber}-р байр</p>
+                ) : null}
               </div>
-              <ChevronDown size={14} className="shrink-0 text-emerald-100/70" />
             </div>
           </div>
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col bg-[#fbfcfd] dark:bg-slate-950">
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-[#fbfcfd] dark:bg-slate-950">
           <div className="border-b border-gray-100 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900 md:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Building2 size={21} className="text-emerald-700" />
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white p-1 shadow-sm ring-1 ring-emerald-100">
+                  <ResidenceLogo className="h-full w-full" />
+                </span>
                 <div>
                   <p className="text-sm font-black text-gray-900 dark:text-slate-100">Өндөр хотхон</p>
                   <p className="text-[11px] text-gray-400 dark:text-slate-500">Оршин суугчийн систем</p>
@@ -433,7 +525,7 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
                 href === "/resident/requests"
                   ? openRequests
                   : href === "/resident/news"
-                    ? announcements.length
+                    ? unreadAnnouncementCount
                     : 0;
               return (
                 <Link
@@ -463,12 +555,27 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
                     <h1 className="text-xl font-black text-gray-900 dark:text-slate-50">{currentTitle}</h1>
                     <p className="mt-1 text-xs font-medium text-gray-400 dark:text-slate-500">Сайн байна уу, {user?.name ?? "Оршин суугч"}</p>
                   </div>
-                  <button className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:text-emerald-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    <Bell size={17} />
-                    {announcements.length > 0 ? (
-                      <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500" />
-                    ) : null}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <ThemeToggle
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:text-emerald-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                      iconSize={17}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNotifications(true);
+                        markAnnouncementsRead();
+                      }}
+                      className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:text-emerald-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                      title="Мэдэгдэл"
+                      aria-label="Мэдэгдэл"
+                    >
+                      <Bell size={17} />
+                      {unreadAnnouncementCount > 0 ? (
+                        <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500" />
+                      ) : null}
+                    </button>
+                  </div>
                 </header>
 
                 <div className="space-y-5 p-4 sm:p-5">
@@ -527,7 +634,7 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
                           onVote={votePoll}
                           fmtDate={fmtDate}
                         />
-                        <AnnouncementsList announcements={announcements} loading={loading} fmtDate={fmtDate} compact />
+                        <AnnouncementsList announcements={announcements} loading={loading} fmtDate={fmtDate} compact onOpenImage={setSelectedAnnouncementImage} />
                       </div>
                     </>
                   ) : null}
@@ -541,6 +648,8 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
                       payingId={payingId}
                       payMessage={payMessage}
                       onPay={payPayment}
+                  deletingPaymentId={deletingPaymentId}
+                  onDeletePayment={deletePayment}
                       onShowReceipt={(payment) =>
                         setReceipt({ payment, receiptNo: receiptNoFromPayment(payment) })
                       }
@@ -588,10 +697,19 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
                   ) : null}
 
                   {view === "announcements" ? (
-                    <AnnouncementsList announcements={announcements} loading={loading} fmtDate={fmtDate} />
+                    <AnnouncementsList announcements={announcements} loading={loading} fmtDate={fmtDate} onOpenImage={setSelectedAnnouncementImage} />
                   ) : null}
 
-                  {view === "profile" ? <ProfileView user={user} loading={loading} fmtDate={fmtDate} /> : null}
+                  {view === "profile" ? (
+                    <ProfileView
+                      user={user}
+                      loading={loading}
+                      fmtDate={fmtDate}
+                      payments={payments}
+                      requests={requests}
+                      onProfileUpdated={(updatedUser) => setUser((current) => current ? { ...current, ...updatedUser } : updatedUser)}
+                    />
+                  ) : null}
 
                   {view === "docs" ? <DocsView /> : null}
 
@@ -611,7 +729,7 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
           submitting={submitting}
           onClose={() => {
             setShowReqForm(false);
-            setReqForm({ title: "", description: "" });
+            setReqForm({ title: "", description: "", notes: "" });
           }}
           inputClass={inputClass}
         />
@@ -627,6 +745,20 @@ export function ResidentDashboard({ view = "overview" }: ResidentDashboardProps)
             mounted ? new Date(iso).toLocaleString("mn-MN", { dateStyle: "medium", timeStyle: "short" }) : "—"
           }
           onClose={() => setReceipt(null)}
+        />
+      ) : null}
+
+      <NotificationsModal
+        open={showNotifications}
+        announcements={announcements}
+        onClose={() => setShowNotifications(false)}
+        title="Мэдэгдэл"
+      />
+
+      {selectedAnnouncementImage ? (
+        <ImagePreviewModal
+          image={selectedAnnouncementImage}
+          onClose={() => setSelectedAnnouncementImage(null)}
         />
       ) : null}
     </div>
@@ -932,11 +1064,13 @@ function AnnouncementsList({
   loading,
   fmtDate,
   compact = false,
+  onOpenImage,
 }: {
   announcements: Announcement[];
   loading: boolean;
   fmtDate: (date?: string | null) => string;
   compact?: boolean;
+  onOpenImage?: (image: { src: string; title: string }) => void;
 }) {
   return (
     <Card className="overflow-hidden">
@@ -950,11 +1084,12 @@ function AnnouncementsList({
           ) : null
         }
       />
-      <div className="divide-y divide-gray-50 dark:divide-slate-800">
+      <div className={compact ? "divide-y divide-gray-50 dark:divide-slate-800" : "grid gap-4 px-5 pb-5 sm:grid-cols-2"}>
         {loading ? (
           [1, 2, 3].map((item) => (
-            <div key={item} className="px-5 py-4">
-              <div className="h-4 animate-pulse rounded bg-gray-100 dark:bg-slate-700" />
+            <div key={item} className={compact ? "px-5 py-4" : "overflow-hidden rounded-xl border border-gray-100 bg-white dark:border-slate-700 dark:bg-slate-900"}>
+              <div className={compact ? "h-4 animate-pulse rounded bg-gray-100 dark:bg-slate-700" : "h-44 animate-pulse bg-gray-100 dark:bg-slate-700"} />
+              {!compact ? <div className="space-y-2 p-4"><div className="h-4 animate-pulse rounded bg-gray-100 dark:bg-slate-700" /><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100 dark:bg-slate-700" /></div> : null}
             </div>
           ))
         ) : announcements.length === 0 ? (
@@ -963,6 +1098,40 @@ function AnnouncementsList({
           announcements.slice(0, compact ? 4 : announcements.length).map((announcement) => {
             const tone = announcementTone[announcement.type] ?? announcementTone.INFO;
             const Icon = tone.Icon;
+            if (!compact) {
+              return (
+                <article key={announcement.id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900">
+                  {announcement.imageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenImage?.({ src: announcement.imageUrl!, title: announcement.title })}
+                      className="block w-full cursor-zoom-in overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <img src={announcement.imageUrl} alt="" className="h-48 w-full object-cover transition duration-300 hover:scale-[1.02]" />
+                    </button>
+                  ) : (
+                    <div className={`flex h-36 w-full items-center justify-center ${tone.bg}`}>
+                      <Icon size={34} className={tone.text} />
+                    </div>
+                  )}
+                  <div className="p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${tone.bg} ${tone.text}`}>
+                        <Icon size={13} />
+                        Зарлал
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-gray-400 dark:text-slate-500">
+                        <CalendarDays size={13} />
+                        {fmtDate(announcement.createdAt)}
+                      </span>
+                    </div>
+                    <h3 className="line-clamp-2 text-base font-black leading-6 text-gray-900 dark:text-slate-50">{announcement.title}</h3>
+                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-500 dark:text-slate-400">{announcement.content}</p>
+                  </div>
+                </article>
+              );
+            }
+
             return (
               <div key={announcement.id} className="flex items-start gap-3 px-5 py-3.5">
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tone.bg} ${tone.text}`}>
@@ -970,6 +1139,15 @@ function AnnouncementsList({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-gray-800 dark:text-slate-100">{announcement.title}</p>
+                  {announcement.imageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenImage?.({ src: announcement.imageUrl!, title: announcement.title })}
+                      className="mt-2 block cursor-zoom-in overflow-hidden rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <img src={announcement.imageUrl} alt="" className="h-20 w-28 object-cover transition duration-300 hover:scale-105" />
+                    </button>
+                  ) : null}
                   {!compact ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500 dark:text-slate-400">{announcement.content}</p> : null}
                 </div>
                 <p className="shrink-0 text-xs text-gray-400 dark:text-slate-500">{fmtDate(announcement.createdAt)}</p>
@@ -982,6 +1160,35 @@ function AnnouncementsList({
   );
 }
 
+function ImagePreviewModal({
+  image,
+  onClose,
+}: {
+  image: { src: string; title: string };
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white shadow-lg transition hover:bg-black/75"
+          aria-label="Хаах"
+        >
+          <X size={20} />
+        </button>
+        <div className="overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
+          <img src={image.src} alt="" className="max-h-[78vh] w-full object-contain bg-black" />
+          <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+            <p className="truncate text-sm font-black text-slate-900 dark:text-slate-50">{image.title}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PaymentsView({
   payments,
   latestPayment,
@@ -990,6 +1197,8 @@ function PaymentsView({
   payingId,
   payMessage,
   onPay,
+  onDeletePayment,
+  deletingPaymentId,
   onShowReceipt,
 }: {
   payments: Payment[];
@@ -999,6 +1208,8 @@ function PaymentsView({
   payingId: string | null;
   payMessage: string;
   onPay: (paymentId: string) => void;
+  onDeletePayment: (paymentId: string) => void;
+  deletingPaymentId: string | null;
   onShowReceipt: (payment: Payment) => void;
 }) {
   const canPay = (p: Payment) => p.status === "PENDING" || p.status === "OVERDUE";
@@ -1102,14 +1313,25 @@ function PaymentsView({
                           Төлөх
                         </button>
                       ) : payment.status === "PAID" ? (
-                        <button
-                          type="button"
-                          onClick={() => onShowReceipt(payment)}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline dark:text-emerald-400"
-                        >
-                          <Printer size={14} />
-                          Баримт
-                        </button>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <button
+                            type="button"
+                            onClick={() => onShowReceipt(payment)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline dark:text-emerald-400"
+                          >
+                            <Printer size={14} />
+                            Баримт
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeletePayment(payment.id)}
+                            disabled={deletingPaymentId === payment.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingPaymentId === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 size={14} />}
+                            Устгах
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
@@ -1141,8 +1363,8 @@ function RequestsView({
   loading: boolean;
   showReqForm: boolean;
   setShowReqForm: (show: boolean) => void;
-  reqForm: { title: string; description: string };
-  setReqForm: (form: { title: string; description: string }) => void;
+  reqForm: { title: string; description: string; notes: string };
+  setReqForm: (form: { title: string; description: string; notes: string }) => void;
   submitRequest: () => void;
   submitting: boolean;
   inputClass: string;
@@ -1177,7 +1399,14 @@ function RequestsView({
               value={reqForm.description}
               onChange={(event) => setReqForm({ ...reqForm, description: event.target.value })}
               placeholder="Дэлгэрэнгүй тайлбар"
-              rows={4}
+              rows={3}
+              className={`${inputClass} resize-none`}
+            />
+            <textarea
+              value={reqForm.notes}
+              onChange={(event) => setReqForm({ ...reqForm, notes: event.target.value })}
+              placeholder="Нэмэлт мэдээлэл (шаардлагагүй)"
+              rows={2}
               className={`${inputClass} resize-none`}
             />
             <div className="flex flex-wrap gap-3">
@@ -1191,7 +1420,7 @@ function RequestsView({
               <button
                 onClick={() => {
                   setShowReqForm(false);
-                  setReqForm({ title: "", description: "" });
+                  setReqForm({ title: "", description: "", notes: "" });
                 }}
                 className="rounded-md border border-gray-200 px-5 py-2.5 text-xs font-bold text-gray-500 transition hover:bg-gray-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800/80"
               >
@@ -1252,8 +1481,8 @@ function RequestModal({
   onClose,
   inputClass,
 }: {
-  reqForm: { title: string; description: string };
-  setReqForm: (form: { title: string; description: string }) => void;
+  reqForm: { title: string; description: string; notes: string };
+  setReqForm: (form: { title: string; description: string; notes: string }) => void;
   submitRequest: () => void;
   submitting: boolean;
   onClose: () => void;
@@ -1274,7 +1503,14 @@ function RequestModal({
             value={reqForm.description}
             onChange={(event) => setReqForm({ ...reqForm, description: event.target.value })}
             placeholder="Дэлгэрэнгүй тайлбар"
-            rows={4}
+            rows={3}
+            className={`${inputClass} resize-none`}
+          />
+          <textarea
+            value={reqForm.notes}
+            onChange={(event) => setReqForm({ ...reqForm, notes: event.target.value })}
+            placeholder="Нэмэлт мэдээлэл (шаардлагагүй)"
+            rows={2}
             className={`${inputClass} resize-none`}
           />
           <div className="flex flex-wrap gap-3">
@@ -1299,22 +1535,79 @@ function ProfileView({
   user,
   loading,
   fmtDate,
+  payments,
+  requests,
+  onProfileUpdated,
 }: {
   user: UserType | null;
   loading: boolean;
   fmtDate: (date?: string | null) => string;
+  payments: Payment[];
+  requests: Request[];
+  onProfileUpdated: (user: UserType) => void;
 }) {
+  const latestPayment = payments[0];
+  const [form, setForm] = useState({ name: "", phoneNumber: "", unitNumber: "", avatarUrl: "" });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setForm({
+      name: user?.name ?? "",
+      phoneNumber: user?.phoneNumber ?? "",
+      unitNumber: user?.unitNumber ?? "",
+      avatarUrl: user?.avatarUrl ?? "",
+    });
+  }, [user]);
+
   const rows = [
     { label: "Нэр", value: user?.name ?? "—" },
     { label: "Имэйл", value: user?.email ?? "—" },
     { label: "Утас", value: user?.phoneNumber ?? "—" },
+    { label: "Роль", value: "Оршин суугч" },
     { label: "Байрны дугаар", value: user?.unitNumber ?? "—" },
     { label: "Бүртгэлийн огноо", value: fmtDate(user?.createdAt) },
+    { label: "Сүүлийн төлбөр", value: latestPayment ? `${latestPayment.month}-р сар · ${latestPayment.amount.toLocaleString()}₮` : "—" },
+    { label: "Сүүлийн төлбөрийн төлөв", value: latestPayment ? payStatus[latestPayment.status].label : "—" },
   ];
 
+  const handleAvatarChange = (file?: File) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setForm((current) => ({ ...current, avatarUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    setSaving(true);
+    setMessage("");
+    try {
+      const res = await fetch("/api/resident/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        setMessage("Мэдээлэл хадгалж чадсангүй.");
+        return;
+      }
+      const updated = await res.json();
+      onProfileUpdated(updated);
+      setMessage("Мэдээлэл шинэчлэгдлээ.");
+    } catch (error) {
+      console.error(error);
+      setMessage("Сервертэй холбогдож чадсангүй.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <Card className="overflow-hidden">
-      <CardHeader title="Миний мэдээлэл" />
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="overflow-hidden">
+        <CardHeader title="Миний мэдээлэл" />
       {loading ? (
         <div className="space-y-3 p-5">
           {[1, 2, 3].map((item) => (
@@ -1331,7 +1624,70 @@ function ProfileView({
           ))}
         </div>
       )}
-    </Card>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader title="Мэдээлэл засах" />
+        {loading ? (
+          <div className="space-y-3 p-5">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="h-4 animate-pulse rounded bg-gray-100 dark:bg-slate-700" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4 p-5">
+            <div className="flex items-center gap-4">
+              <div className="h-20 w-20 overflow-hidden rounded-2xl border border-gray-100 bg-emerald-50 dark:border-slate-700 dark:bg-slate-800">
+                {form.avatarUrl ? (
+                  <img src={form.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full w-full place-items-center text-2xl font-black text-emerald-700">
+                    {(form.name || user?.email || "U").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-emerald-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-500">
+                  Зураг солих
+                  <input type="file" accept="image/*" onChange={(event) => handleAvatarChange(event.target.files?.[0])} className="hidden" />
+                </label>
+                {form.avatarUrl ? (
+                  <button type="button" onClick={() => setForm((current) => ({ ...current, avatarUrl: "" }))} className="ml-2 rounded-md border border-gray-200 px-3 py-2 text-xs font-bold text-gray-500 transition hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                    Устгах
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <label className="grid gap-1.5 text-xs font-bold text-gray-500 dark:text-slate-400">
+                Нэр
+                <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" />
+              </label>
+              <label className="grid gap-1.5 text-xs font-bold text-gray-500 dark:text-slate-400">
+                Утас
+                <input value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" />
+              </label>
+              <label className="grid gap-1.5 text-xs font-bold text-gray-500 dark:text-slate-400">
+                Байрны дугаар
+                <input value={form.unitNumber} onChange={(event) => setForm({ ...form, unitNumber: event.target.value })} className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" />
+              </label>
+              <label className="grid gap-1.5 text-xs font-bold text-gray-400 dark:text-slate-500">
+                Имэйл
+                <input value={user?.email ?? ""} disabled className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500" />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button onClick={saveProfile} disabled={saving} className="rounded-md bg-emerald-600 px-5 py-2.5 text-xs font-black text-white transition hover:bg-emerald-500 disabled:opacity-50">
+                {saving ? "Хадгалж байна..." : "Хадгалах"}
+              </button>
+              {message ? <p className="text-xs font-bold text-emerald-600 dark:text-emerald-300">{message}</p> : null}
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
 

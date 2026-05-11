@@ -17,31 +17,24 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Check cookies
-        const cookies = document.cookie;
-        const userId = cookies
-          .split("; ")
-          .find((row) => row.startsWith("userId="))
-          ?.split("=")[1];
-        const userRole = cookies
-          .split("; ")
-          .find((row) => row.startsWith("userRole="))
-          ?.split("=")[1];
-
-        if (!userId || !userRole) {
-          // Not logged in - redirect to login
+        const res = await fetch("/api/auth/me");
+        
+        if (!res.ok) {
           router.push(`/login?from=${encodeURIComponent(pathname)}`);
           return;
         }
 
-        // Check role if specified
+        const data = await res.json();
+        const userRole = data.user.role;// /api/auth/me-с role ирнэ
+
         if (allowedRoles && !allowedRoles.includes(userRole)) {
-          // Wrong role - redirect to unauthorized
           router.push("/unauthorized");
           return;
         }
 
         setIsAuthorized(true);
+      } catch {
+        router.push(`/login?from=${encodeURIComponent(pathname)}`);
       } finally {
         setIsLoading(false);
       }
@@ -68,7 +61,6 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
   return <>{children}</>;
 }
 
-// Pre-configured guards for different roles
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   return <AuthGuard allowedRoles={["ADMIN"]}>{children}</AuthGuard>;
 }
@@ -81,7 +73,6 @@ export function ResidentGuard({ children }: { children: React.ReactNode }) {
   return <AuthGuard allowedRoles={["RESIDENT", "ADMIN"]}>{children}</AuthGuard>;
 }
 
-// Generic auth guard (any logged in user)
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   return <AuthGuard>{children}</AuthGuard>;
 }

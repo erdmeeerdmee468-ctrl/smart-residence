@@ -82,13 +82,54 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await getSessionUser();
-    const gate = requireRoles(session, ["SOH", "ADMIN"]);
+    const gate = requireRoles(session, ["SOH"]);
     if (gate instanceof NextResponse) return gate;
 
-    const { residentId, amount, month, description } = await req.json();
+    const { residentId, residentIds, amount, month, description } = await req.json();
+    const bulkResidentIds = Array.isArray(residentIds)
+      ? residentIds.filter((id): id is string => typeof id === "string" && Boolean(id.trim()))
+      : [];
 
-    if (!residentId || !amount || !month) {
+    if ((!residentId && bulkResidentIds.length === 0) || !amount || !month) {
       return NextResponse.json({ message: "Мэдээлэл дутуу байна" }, { status: 400 });
+    }
+
+    if (bulkResidentIds.length > 0) {
+      const cleanAmount = Number(amount);
+      if (!Number.isFinite(cleanAmount) || cleanAmount <= 0) {
+        return NextResponse.json({ message: "Төлбөрийн дүн буруу байна" }, { status: 400 });
+      }
+
+      const residents = await prisma.user.findMany({
+        where: { id: { in: Array.from(new Set(bulkResidentIds)) }, role: "RESIDENT" },
+        select: residentSelect,
+      });
+      const payments = await Promise.all(
+        residents.map((resident) =>
+          prisma.payment.create({
+            data: { residentId: resident.id, amount: cleanAmount, month, description, status: "PENDING" },
+            select: {
+              id: true,
+              residentId: true,
+              amount: true,
+              month: true,
+              description: true,
+              status: true,
+              createdAt: true,
+            },
+          }),
+        ),
+      );
+      const residentMap = new Map(residents.map((resident) => [resident.id, resident]));
+
+      return NextResponse.json({
+        success: true,
+        count: payments.length,
+        payments: payments.map((payment) => ({
+          ...payment,
+          resident: toResidentSummary(residentMap.get(payment.residentId) ?? null),
+        })),
+      });
     }
 
     const payment = await prisma.payment.create({
