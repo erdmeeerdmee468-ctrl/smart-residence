@@ -57,7 +57,7 @@ export default function HomePage() {
       />
 
       <div className="relative z-10 flex min-h-[100dvh] flex-col">
-        <header className="flex shrink-0 items-center justify-center px-5 py-5 sm:justify-start sm:px-6 lg:px-8">
+        <header className="flex shrink-0 items-center justify-center px-5 py-5 sm:px-6 md:justify-between lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md sm:h-12 sm:w-12">
               <ResidenceLogo className="h-full w-full" />
@@ -68,6 +68,16 @@ export default function HomePage() {
               </p>
               <h1 className="truncate text-sm font-bold text-white sm:text-lg">Орон сууцны ухаалаг систем</h1>
             </div>
+          </div>
+
+          <div className="hidden items-center justify-end gap-4 md:flex">
+            <p className="text-sm font-semibold text-white/90 lg:text-base">Та манай оршин суугч уу?</p>
+            <Link
+              href="/login"
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-7 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 active:scale-95"
+            >
+              Нэвтрэх
+            </Link>
           </div>
         </header>
 
@@ -97,7 +107,7 @@ export default function HomePage() {
               найдвартай байдлаар хүргэнэ.
             </p>
 
-            <div className="mx-auto mt-7 flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-white/15 bg-black/20 px-4 py-4 shadow-2xl shadow-black/20 backdrop-blur-md sm:mt-8 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-0">
+            <div className="mx-auto mt-7 flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-white/15 bg-black/20 px-4 py-4 shadow-2xl shadow-black/20 backdrop-blur-md md:hidden">
               <p className="text-center text-sm font-semibold text-white/90 sm:text-base">Та манай оршин суугч уу?</p>
               <Link
                 href="/login"
