@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, requireRoles } from "@/lib/session";
 
-async function getSohRecipientEmails() {
-  const sohUsers = await prisma.user.findMany({
+async function getSohRecipientEmails(): Promise<string[]> {
+  const sohUsers: { email: string }[] = await prisma.user.findMany({
     where: {
       role: "SOH",
       email: { not: "" },
