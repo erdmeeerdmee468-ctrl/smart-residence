@@ -4,6 +4,7 @@ out
 dist
 debug.log
 dev-server*.log
+*.tsbuildinfo
 
 # Keep environment variables out of version control
 .env

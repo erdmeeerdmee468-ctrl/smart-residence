@@ -14,7 +14,7 @@ async function getSohRecipientEmails(): Promise<string[]> {
   return Array.from(
     new Set(
       sohUsers
-        .map((user) => user.email)
+        .map((user: { email: string }) => user.email)
         .filter((email): email is string => Boolean(email)),
     ),
   );
